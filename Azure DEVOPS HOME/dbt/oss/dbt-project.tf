@@ -28,7 +28,7 @@ count = var.env == "dev" || var.env == "prd" ? 1 : 0
 resource "dbt_cloud_repository" "azure-devops-repo" {
 count = var.env == "dev" || var.env == "prd" ? 1 : 0
   project_id = dbt_cloud_project.dbt-cloud-project-dev.id
-  remote_url = "git::data3-dataops@dev.azure.com/data3-dataops/Data3/_git/data3-dataops-dbt-oss"
+  remote_url = "git::repo url"
 
 }
 #For DEV, and PRD
