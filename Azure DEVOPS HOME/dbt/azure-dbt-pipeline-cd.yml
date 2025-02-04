@@ -21,9 +21,9 @@ parameters:
 
   - name: product
     type: string
-    default: 'oss'
+    default: 'project_name'
     values:
-      - oss
+      - project_name
 
   - name: environment_choice
     type: string
