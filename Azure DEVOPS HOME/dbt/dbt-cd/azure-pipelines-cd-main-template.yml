@@ -57,19 +57,6 @@ stages:
                   echo "----- ${{ variables.stage_select }}"
                 displayName: "Pipeline Variables"
 
-              # - task: InstallSSHKey@0
-              #   displayName: 'Install an SSH key'
-              #   inputs:
-              #     knownHostsEntry: '$(ado_ssh_key_known_hosts)'
-              #     sshPublicKey: '$(ado_ssh_key_public_key)'
-              #     sshPassphrase: '$(ado_ssh_key_passphrase)'
-              #     sshKeySecureFile: 'ado_git_id_rsa'
-
-              # - task: DownloadSecureFile@1
-              #   displayName: downloadFile
-              #   inputs:
-              #     secureFile: 'rsa_key.p8'
-
               - task: DownloadPipelineArtifact@2
                 inputs:
                   buildType: 'specific'
