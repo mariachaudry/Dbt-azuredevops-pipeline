@@ -1,0 +1,52 @@
+trigger: none
+pool:
+  name: Azure Pipelines
+
+parameters:
+  - name: source_folder
+    type: string
+    default: 'dbt'
+    values:
+      - dbt
+
+  - name: product
+    type: string
+    default: 'oss'
+    values:
+      - oss
+
+stages:
+  - stage: Build
+    jobs:
+      - job: Build_Artifact
+        steps:
+          - task: CopyFiles@2
+            inputs:
+              SourceFolder: "${{ parameters.source_folder }}/env"
+              Contents: |
+                **/*
+                !.git/**/*
+                !**/.terraform/**/*
+                !**/*.lock.hcl
+                !*.tfstate*
+              TargetFolder: '$(build.artifactstagingdirectory)/terraform/env'
+            displayName: 'Copy Terraform Env files to artifacts'
+
+          - task: CopyFiles@2
+            displayName: 'Copy oss files to artefacts'
+            inputs:
+              SourceFolder: '${{ parameters.source_folder }}/${{ parameters.product }}'
+              Contents: |
+                **/*
+                !.git/**/*
+                !**/.terraform/**/*
+                !**/*.lock.hcl
+                !*.tfstate*
+                !*.md*
+              TargetFolder: '$(build.artifactstagingdirectory)/terraform/${{ parameters.product }}'
+
+          - task: PublishPipelineArtifact@1
+            inputs:
+              path: '$(build.artifactstagingdirectory)/terraform'
+              artifactName: '${{ parameters.source_folder }}-tf'
+              artifactType: 'pipeline'

@@ -1,0 +1,61 @@
+
+trigger: none
+resources:
+  pipelines:
+    - pipeline: data3-dataops-infrastructure-dbt-ci
+      source: data3-dataops-infrastructure-dbt-ci
+      trigger:
+        branches:
+          include:
+            - master
+            - main
+            - develop
+
+
+parameters:
+  - name: source_folder
+    type: string
+    default: 'dbt'
+    values:
+      - dbt
+
+  - name: product
+    type: string
+    default: 'oss'
+    values:
+      - oss
+
+  - name: environment_choice
+    type: string
+    default: 'dev'
+    values:
+      - dev
+      - sit
+      - uat
+      - nft
+      - prd
+
+
+  - name: pool_name
+    type: string
+    default: 'Azure Pipelines'
+    values:
+      - Azure Pipelines
+      - Azure Pipelines1
+
+stages:
+  - template: "./${{ parameters.source_folder }}-cd/azure-pipelines-cd-main-template.yml"
+    parameters:
+      source_folder: "${{ parameters.source_folder }}"
+      product: "${{ parameters.product }}"
+      pool_name: "${{ parameters.pool_name }}"
+      ${{ if contains(variables['Build.SourceBranch'], 'refs/heads/feature') }}:
+        environment_choice: "dev"
+      ${{ elseif eq(variables['Build.SourceBranch'], 'refs/heads/main') }}:
+        ${{ if notIn(parameters.environment_choice, 'prd') }}:
+          environment_choice: "${{ parameters.environment_choice}}"
+      ${{ elseif contains(variables['Build.SourceBranch'], 'refs/heads/release') }}:
+        environment_choice: "prd"
+
+      # stage_choice: "${{ parameters.environment_choice}}"
+      

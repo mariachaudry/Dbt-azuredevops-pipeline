@@ -1,0 +1,12 @@
+dbt_cloud_project_name        = "oss_tf"
+dbt_cloud_project_prefix      = "test"                               #prod for prd
+dbt_cloud_no_of_threads       = "4"
+dbt_cloud_schema              = "PUBLIC"
+dbt_cloud_project             = "OSS"
+dbt_cloud_repo                = "develop"                               #main for SIT, UAT, NFT and prod for prd
+dbt_cloud_snowflake_role      = "SVC_NONPRD_OSS_ETL"                    #SVC_PRD_OSS_ETL for prd
+dbt_cloud_snowflake_account   = "testthreemobile.west-europe.azure"  #change for prd
+dbt_cloud_connection_name     = "three-snowflake-connection"            #three-prod-snowflake-connection for prd
+dbt_cloud_snowflake_warehouse = "DEV_OSS_TRANSFORMATIO"             #change based on env
+dbt_cloud_snowflake_user      = "SVC_NONPRD_OSS_ETL"                    #change for prd
+dbt_cloud_snowflake_password  = "Tr2oq9XObic!Sh!o"                  #change for prd

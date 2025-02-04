@@ -1,0 +1,209 @@
+parameters:
+# during stages to run only picks one set in default -- maybe cant take realtime parameters
+  - name: environment_choice
+    type: string
+    default: 'dev'
+  
+  - name: pool_name
+    type: string
+    default: 'Azure Pipelines'
+
+  - name: source_folder
+    type: string
+    default: 'dbt'
+    values:
+      - dbt
+
+  - name: product
+    type: string
+    default: 'oss'
+    values:
+      - oss
+
+stages:
+      - stage: "${{ parameters.environment_choice }}_PLAN"
+        displayName: "${{ upper(parameters.environment_choice) }} PLAN"
+        pool:
+          name: ${{parameters.pool_name}}
+        # all variable groups must be defined before hand
+        variables:
+              - group: "${{ parameters.source_folder }}_${{ lower(parameters.environment_choice) }}"
+              - name: backendServiceArm
+                value: 'azuretff'
+              - name: backendAzureRmResourceGroupName
+                value: 'devops-journey-rg'
+              - name: backendAzureRmStorageAccountName
+                value: 'testazdevopsmary'
+              - name: backendAzureRmContainerName
+                value: '${{ lower(parameters.environment_choice) }}'
+              - name: backendAzureRmKey
+                value: 'terraform_${{ parameters.source_folder }}_${{ lower(parameters.environment_choice) }}.tfstate'
+        jobs:
+        # doesnot create env and deployment automatically also approvals need to be set on environment
+          - deployment: "Artifact_Download"
+            environment: "terraform_${{ parameters.source_folder }}_${{ lower(parameters.environment_choice) }}"
+          - job: "${{parameters.source_folder}}_Resource_Creation_Plan"
+            steps:
+              - script: |
+                  echo "environment_choice: ENVIRONMENT IS: ${{ parameters.environment_choice }}"
+                  echo "source_folder : SOURCE FOLDER IS: ${{ parameters.source_folder }}"
+                  echo "product : PRODUCT TARGETED IS: ${{ parameters.product }}"
+                  echo "project id: $(resources.pipeline.data3-dataops-infrastructure-${{ parameters.source_folder }}-ci.projectID)"
+                  echo "backendServiceArm $(backendServiceArm)"
+                  echo "backendAzureRmResourceGroupName $(backendAzureRmResourceGroupName)"
+                  echo "backendAzureRmStorageAccountName $(backendAzureRmStorageAccountName)"
+                  echo "backendAzureRmContainerName $(backendAzureRmContainerName)"
+                  echo "backendAzureRmKey $(backendAzureRmKey)"
+                  echo "----- ${{ variables.stage_select }}"
+                displayName: "Pipeline Variables"
+
+              # - task: InstallSSHKey@0
+              #   displayName: 'Install an SSH key'
+              #   inputs:
+              #     knownHostsEntry: '$(ado_ssh_key_known_hosts)'
+              #     sshPublicKey: '$(ado_ssh_key_public_key)'
+              #     sshPassphrase: '$(ado_ssh_key_passphrase)'
+              #     sshKeySecureFile: 'ado_git_id_rsa'
+
+              # - task: DownloadSecureFile@1
+              #   displayName: downloadFile
+              #   inputs:
+              #     secureFile: 'rsa_key.p8'
+
+              - task: DownloadPipelineArtifact@2
+                inputs:
+                  buildType: 'specific'
+                  project: $(resources.pipeline.data3-dataops-infrastructure-${{ parameters.source_folder }}-ci.projectID)
+                  definition: data3-dataops-infrastructure-${{ parameters.source_folder }}-ci
+                  artifactName: '${{ parameters.source_folder }}-tf'
+                  specificBuildWithTriggering: true
+                  downloadPath: $(build.artifactstagingdirectory)
+                  buildVersionToDownload: 'specific'
+                  runId: $(resources.pipeline.data3-dataops-infrastructure-${{ parameters.source_folder }}-ci.runID)
+                  retryCountOnTaskFailure: 1
+                  targetPath: '$(System.DefaultWorkingDirectory)/${{ parameters.source_folder }}/drop/Terraform'
+
+              - task: qetza.replacetokens.replacetokens-task.replacetokens@5
+                displayName: 'Replace tokens in tf files'
+                inputs:
+                  targetFiles: '$(System.DefaultWorkingDirectory)/${{ parameters.source_folder }}/drop/Terraform/${{ parameters.product }}/provider.tf'
+                  tokenPattern: rm
+
+              - task: ms-devlabs.custom-terraform-tasks.custom-terraform-installer-task.TerraformInstaller@0
+                displayName: 'Install Terraform latest'
+                inputs:
+                  terraformVersion: 'latest '
+
+              - task: TerraformTaskV2@2
+                displayName: 'Terraform : init'
+                inputs:
+                  workingDirectory: '$(System.DefaultWorkingDirectory)/${{ parameters.source_folder }}/drop/Terraform/${{ parameters.product }}'
+                  provider: 'azurerm'
+                  command: 'init'
+                  commandOptions: '-no-color'
+                  backendServiceArm: '${{ variables.backendServiceArm }}'
+                  backendAzureRmResourceGroupName: '${{ variables.backendAzureRmResourceGroupName }}'
+                  backendAzureRmStorageAccountName: '${{ variables.backendAzureRmStorageAccountName }}'
+                  backendAzureRmContainerName: '${{ variables.backendAzureRmContainerName }}'
+                  backendAzureRmKey: '${{ variables.backendAzureRmKey }}' 
+
+              - task: TerraformTaskV2@2
+                displayName: 'Terraform : plan targeted'
+                inputs:
+                  command: plan
+                  provider: 'azurerm'
+                  workingDirectory: '$(System.DefaultWorkingDirectory)/${{ parameters.source_folder }}/drop/Terraform/${{ parameters.product }}'
+                  commandOptions: '-var-file="$(System.DefaultWorkingDirectory)/${{ parameters.source_folder }}/drop/Terraform/env/${{ lower(parameters.environment_choice) }}.tfvars" -var-file="$(System.DefaultWorkingDirectory)/${{ parameters.source_folder }}/drop/Terraform/${{ lower(parameters.product) }}/${{ lower(parameters.product) }}.tfvars" -no-color'
+                  environmentServiceNameAzureRM: '${{ variables.backendServiceArm }}'
+                  # backendServiceArm: '${{ variables.backendServiceArm }}'
+                  # backendAzureRmResourceGroupName: '${{ variables.backendAzureRmResourceGroupName }}'
+                  # backendAzureRmStorageAccountName: '${{ variables.backendAzureRmResourceGroupName }}'
+                  # backendAzureRmContainerName: '${{ variables.backendAzureRmContainerName }}'
+                  # backendAzureRmKey: '${{ variables.backendAzureRmKey }}' 
+
+      - stage: "${{ parameters.environment_choice }}_APPLY"
+        displayName: "${{ upper(parameters.environment_choice) }} APPLY"
+        dependsOn: [ "${{ parameters.environment_choice }}_PLAN" ]
+        pool:
+          name: ${{parameters.pool_name}}
+        variables:
+              - group: "${{ parameters.source_folder }}_${{ lower(parameters.environment_choice) }}"
+              - name: backendServiceArm
+                value: 'azuretff'
+              - name: backendAzureRmResourceGroupName
+                value: 'devops-journey-rg'
+              - name: backendAzureRmStorageAccountName
+                value: 'testazdevopsmary'
+              - name: backendAzureRmContainerName
+                value: '${{ lower(parameters.environment_choice) }}'
+              - name: backendAzureRmKey
+                value: 'terraform_${{ parameters.source_folder }}_${{ lower(parameters.environment_choice) }}.tfstate'
+        jobs:
+          - deployment: "Artifact_Download"
+            environment: "terraform_${{ parameters.source_folder }}_${{ lower(parameters.environment_choice) }}"
+          - job: "${{parameters.source_folder}}_Resource_Creation_APPLY"
+            steps:
+              - script: echo running "${{ parameters.environment_choice }}_APPLY"
+
+              - script: |
+                  echo "environment_choice: ENVIRONMENT IS: ${{ parameters.environment_choice }}"
+                  echo "source_folder : SOURCE FOLDER IS: ${{ parameters.source_folder }}"
+                  echo "product : PRODUCT TARGETED IS: ${{ parameters.product }}"
+                  echo "backendServiceArm $(backendServiceArm)"
+                  echo "backendAzureRmResourceGroupName $(backendAzureRmResourceGroupName)"
+                  echo "backendAzureRmStorageAccountName $(backendAzureRmStorageAccountName)"
+                  echo "backendAzureRmContainerName $(backendAzureRmContainerName)"
+                  echo "backendAzureRmKey $(backendAzureRmKey)"
+                displayName: "Pipeline Variables"
+              
+              - task: DownloadPipelineArtifact@2
+                inputs:
+                  buildType: 'specific'
+                  project: $(resources.pipeline.data3-dataops-infrastructure-${{ parameters.source_folder }}-ci.projectID)
+                  definition: data3-dataops-infrastructure-${{ parameters.source_folder }}-ci
+                  artifactName: '${{ parameters.source_folder }}-tf'
+                  specificBuildWithTriggering: true
+                  downloadPath: $(build.artifactstagingdirectory)
+                  buildVersionToDownload: 'specific'
+                  runId: $(resources.pipeline.data3-dataops-infrastructure-${{ parameters.source_folder }}-ci.runID)
+                  retryCountOnTaskFailure: 1
+                  targetPath: '$(System.DefaultWorkingDirectory)/${{ parameters.source_folder }}/drop/Terraform'
+
+              - task: qetza.replacetokens.replacetokens-task.replacetokens@5
+                displayName: 'Replace tokens in tf files'
+                inputs:
+                  targetFiles: '$(System.DefaultWorkingDirectory)/${{ parameters.source_folder }}/drop/Terraform/${{ parameters.product }}/provider.tf'
+                  tokenPattern: rm
+
+              - task: ms-devlabs.custom-terraform-tasks.custom-terraform-installer-task.TerraformInstaller@0
+                displayName: 'Install Terraform latest'
+                inputs:
+                  terraformVersion: 'latest'
+
+              - task: TerraformTaskV2@2
+                displayName: 'Terraform : init'
+                inputs:
+                  workingDirectory: '$(System.DefaultWorkingDirectory)/${{ parameters.source_folder }}/drop/Terraform/${{ parameters.product }}'
+                  provider: 'azurerm'
+                  command: 'init'
+                  commandOptions: '-no-color'
+                  backendServiceArm: '${{ variables.backendServiceArm }}'
+                  backendAzureRmResourceGroupName: '${{ variables.backendAzureRmResourceGroupName }}'
+                  backendAzureRmStorageAccountName: '${{ variables.backendAzureRmStorageAccountName }}'
+                  backendAzureRmContainerName: '${{ variables.backendAzureRmContainerName }}'
+                  backendAzureRmKey: '${{ variables.backendAzureRmKey }}' 
+
+              - task: TerraformTaskV2@2
+                displayName: 'Terraform : apply targeted'
+                inputs:
+                  command: apply
+                  provider: 'azurerm'
+                  workingDirectory: '$(System.DefaultWorkingDirectory)/${{ parameters.source_folder }}/drop/Terraform/${{ parameters.product }}'
+                  commandOptions: '-var-file="$(System.DefaultWorkingDirectory)/${{ parameters.source_folder }}/drop/Terraform/env/${{ lower(parameters.environment_choice) }}.tfvars" -var-file="$(System.DefaultWorkingDirectory)/${{ parameters.source_folder }}/drop/Terraform/${{ lower(parameters.product) }}/${{ lower(parameters.product) }}.tfvars" -no-color'
+                  environmentServiceNameAzureRM: '${{ variables.backendServiceArm }}'
+                  # backendServiceArm: '${{ variables.backendServiceArm }}'
+                  # backendAzureRmResourceGroupName: '${{ variables.backendAzureRmResourceGroupName }}'
+                  # backendAzureRmStorageAccountName: '${{ variables.backendAzureRmStorageAccountName }}'
+                  # backendAzureRmContainerName: '${{ variables.backendAzureRmContainerName }}'
+                  # backendAzureRmKey: '${{ variables.backendAzureRmKey }}' 
+
